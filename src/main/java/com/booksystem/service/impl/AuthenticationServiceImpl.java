@@ -25,39 +25,42 @@ public class AuthenticationServiceImpl implements IAuthenticationService {
 
     @Override
     public AuthenticationResponse register(RegisterRequest request) {
-        // Yeni kullanıcıyı oluştur ve şifresini BCrypt ile şifrele
+        // Disaridan kayit olan herkes HER ZAMAN en dusuk yetkiyle baslar.
+        // ADMIN yetkisi yalnizca DataInitializer tarafindan (ADMIN_EMAIL /
+        // ADMIN_PASSWORD env degiskenleri ile) veya mevcut bir ADMIN tarafindan
+        // verilebilir. Bu satirin USER disinda bir deger almasi, kayit olan
+        // herkese silme ve toplu yukleme yetkisi vermek demektir.
         var user = User.builder()
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .role(Role.ADMIN) // Varsayılan olarak herkes normal kullanıcı (USER) başlar
+                .role(Role.USER)
                 .build();
 
         userRepository.save(user);
 
-        // Kullanıcıya özel JWT Token üret
         var jwtToken = jwtService.generateToken(user);
         return AuthenticationResponse.builder()
                 .token(jwtToken)
-                .role(user.getRole().name()) // 🔥 SİHİRLİ DOKUNUŞ: Rolü pakete koyduk
-                .build();    }
+                .role(user.getRole().name())
+                .build();
+    }
 
     @Override
     public AuthenticationResponse authenticate(AuthenticationRequest request) {
-        // Kullanıcı adı ve şifreyi doğrula (Yanlışsa burada Exception fırlar)
+        // Kullanici adi ve sifreyi dogrula (yanlissa buradan exception firlar)
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
         );
 
-        // Kullanıcıyı veritabanından çek
         var user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow();
 
-        // Yeni bir token üret ve dön
         var jwtToken = jwtService.generateToken(user);
         return AuthenticationResponse.builder()
                 .token(jwtToken)
-                .role(user.getRole().name()) // 🔥 SİHİRLİ DOKUNUŞ: Rolü pakete koyduk
-                .build();    }
+                .role(user.getRole().name())
+                .build();
+    }
 }
