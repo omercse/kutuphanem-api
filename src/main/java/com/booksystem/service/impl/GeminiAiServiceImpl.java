@@ -18,8 +18,14 @@ public class GeminiAiServiceImpl implements AiService {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final Locale trLocale = Locale.forLanguageTag("tr-TR");
 
-    @Value("${spring.ai.google.genai.api-key:}")
+    @Value("${gemini.api-key:}")
     private String apiKey;
+
+    @Value("${gemini.base-url}")
+    private String baseUrl;
+
+    @Value("${gemini.model}")
+    private String model;
 
     @Override
     public List<String> detectCategoriesInBatch(List<String> bookTitlesWithAuthors) {
@@ -30,7 +36,7 @@ public class GeminiAiServiceImpl implements AiService {
         }
 
         try {
-            String url = "https://generativelanguage.googleapis.com/v1/models/gemini-3.1-flash-lite:generateContent";
+            String url = String.format("%s/%s:generateContent", baseUrl, model);
 
             StringBuilder bookListBuilder = new StringBuilder();
             for (int i = 0; i < bookTitlesWithAuthors.size(); i++) {
