@@ -26,6 +26,8 @@ public class SecurityConfiguration {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/auth/**").permitAll() // Kayıt/Giriş HERKESE AÇIK
                         .requestMatchers("/", "/index.html", "/favicon.ico").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+                        .requestMatchers("/actuator/health").permitAll() // Docker healthcheck
 
                         // 🔥 1. OKUMA İŞLEMLERİ: Hem USER hem ADMIN yapabilir
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/books/**").hasAnyRole("USER", "ADMIN")

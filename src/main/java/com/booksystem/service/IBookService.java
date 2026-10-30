@@ -16,7 +16,7 @@ public interface IBookService {
     Page<BookResponseDTO> getAllBooks(Pageable pageable);
 
     // 3. Kitap adı ve/veya yazar adına göre dinamik filtreleme
-    List<BookResponseDTO> searchBooks(String title, String author);
+    Page<BookResponseDTO> searchBooks(String title, String author, Pageable pageable);
 
     // 4. Tek bir kitap ekleme
     BookResponseDTO saveBook(BookRequestDTO requestDTO);

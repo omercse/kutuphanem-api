@@ -1,5 +1,6 @@
 package com.booksystem.service.impl;
 
+import com.booksystem.model.BookStatus;
 import com.booksystem.dto.BookRequestDTO;
 import com.booksystem.dto.BookResponseDTO;
 import com.booksystem.model.Author;
@@ -64,6 +65,10 @@ public class BookServiceImpl implements IBookService {
             Map<String, Category> categoryCache = new HashMap<>();
             categoryRepository.findAll().forEach(c -> categoryCache.put(c.getName(), c));
 
+            // Ayni dosya icinde tekrar eden satirlari yakalamak icin (title + authorId)
+            Set<String> seenKeys = new HashSet<>();
+            int skippedCount = 0;
+
             // 1. AŞAMA: Tüm Excel verisini hafızaya alıp hazırlıyoruz
             for (int i = 1; i <= sheet.getLastRowNum(); i++) {
                 Row row = sheet.getRow(i);
@@ -98,7 +103,15 @@ public class BookServiceImpl implements IBookService {
                         authorRepository.save(Author.builder().name(finalAuthorName).build())
                 );
                 book.setAuthor(author);
-                book.setStatus("OKUNMADI");
+                book.setStatus(BookStatus.OKUNMADI);
+
+                // Mukerrer kontrolu: DB'de veya bu dosyada daha once gorulduyse atla
+                // (uq_books_title_author kisiti yuzunden aksi halde saveAll patlar)
+                String key = title + "|" + author.getId();
+                if (!seenKeys.add(key) || bookRepository.existsByTitleAndAuthorId(title, author.getId())) {
+                    skippedCount++;
+                    continue;
+                }
 
                 tempBookList.add(book);
                 aiInputList.add(title + " - " + authorName);
@@ -156,6 +169,9 @@ public class BookServiceImpl implements IBookService {
             if (!tempBookList.isEmpty()) {
                 log.info("Arka plan Excel işleme operasyonu BAŞARIYLA TAMAMLANDI! Toplam {} adet kitap sisteme işlendi.", tempBookList.size());
             }
+            if (skippedCount > 0) {
+                log.info("{} adet mükerrer kitap atlandı.", skippedCount);
+            }
 
         } catch (Exception e) {
             log.error("Arka planda Excel işlenirken kritik bir hata meydana geldi: ", e);
@@ -175,13 +191,12 @@ public class BookServiceImpl implements IBookService {
      * 3. TÜRKÇE KARAKTER UYUMLU DİNAMİK ARAMA/FİLTRELEME METODU
      */
     @Override
-    public List<BookResponseDTO> searchBooks(String title, String author) {
+    public Page<BookResponseDTO> searchBooks(String title, String author, Pageable pageable) {
         String titleParam = (title != null && !title.trim().isEmpty()) ? title.trim().toUpperCase(trLocale) : null;
         String authorParam = (author != null && !author.trim().isEmpty()) ? author.trim().toUpperCase(trLocale) : null;
 
-        return bookRepository.searchBooks(titleParam, authorParam).stream()
-                .map(this::mapToResponseDTO)
-                .collect(Collectors.toList());
+        return bookRepository.searchBooks(titleParam, authorParam, pageable)
+                .map(this::mapToResponseDTO);
     }
 
     /**
@@ -219,7 +234,7 @@ public class BookServiceImpl implements IBookService {
                 .author(author)
                 .category(category) // Artık "GENEL" değil, yapay zekanın bulduğu kategori atanıyor!
                 .excelSiraNo(requestDTO.getExcelSiraNo())
-                .status("OKUNMADI")
+                .status(BookStatus.OKUNMADI)
                 .build();
 
         Book savedBook = bookRepository.save(book);
@@ -235,27 +250,11 @@ public class BookServiceImpl implements IBookService {
         // 1. Kitabı bul, yoksa standart EntityNotFoundException fırlat
         Book book = bookRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Hata: " + id + " ID'li kitap bulunamadı!"));
+        BookStatus newStatus = BookStatus.fromString(status);
 
-        // 2. Boşluk (Null) kontrolü
-        if (status == null || status.trim().isEmpty()) {
-            throw new IllegalArgumentException("Hata: Durum bilgisi boş olamaz!");
-        }
-
-        // 3. Türkçe karakter uyumlu formatlama
-        Locale trLocale = new Locale("tr", "TR");
-        String formattedStatus = status.trim().toUpperCase(trLocale);
-
-        // 🔥 4. SİHİRLİ DOKUNUŞ (Validasyon): Sadece izin verilen durumların girilmesini sağla
-        List<String> validStatuses = Arrays.asList("OKUNMADI", "OKUNUYOR", "OKUNDU");
-        if (!validStatuses.contains(formattedStatus)) {
-            throw new IllegalArgumentException("Hata: Geçersiz durum bilgisi! Kabul edilen değerler: OKUNMADI, OKUNUYOR, OKUNDU");
-        }
-
-        // 5. Güncelle ve Kaydet
-        book.setStatus(formattedStatus);
+        book.setStatus(newStatus);
         Book updatedBook = bookRepository.save(book);
 
-        // 6. DTO'ya çevirip arayüze (Frontend'e) döndür
         return mapToResponseDTO(updatedBook);
     }
 
@@ -269,7 +268,7 @@ public class BookServiceImpl implements IBookService {
                 .title(book.getTitle())
                 .author(book.getAuthor() != null ? book.getAuthor().getName() : "YAZAR BİLİNMİYOR")
                 .category(book.getCategory() != null ? book.getCategory().getName() : "GENEL") // Güncellenen kısım
-                .status(book.getStatus())
+                .status(book.getStatus().name())
                 .build();
     }
 
@@ -435,7 +434,7 @@ public class BookServiceImpl implements IBookService {
                 row.createCell(2).setCellValue(book.getTitle());
                 row.createCell(3).setCellValue(book.getAuthor() != null ? book.getAuthor().getName() : "BİLİNMİYOR");
                 row.createCell(4).setCellValue(book.getCategory() != null ? book.getCategory().getName() : "GENEL");
-                row.createCell(5).setCellValue(book.getStatus());
+                row.createCell(5).setCellValue(book.getStatus().name());
             }
 
             // 4. Optimizasyon: Sütun genişliklerini içeriğe göre otomatik sığdır

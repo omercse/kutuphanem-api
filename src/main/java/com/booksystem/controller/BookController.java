@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -89,11 +91,12 @@ public class BookController {
      * Parametrelerin ikisi de zorunlu değildir (required = false).
      */
     @GetMapping("/search")
-    public ResponseEntity<List<BookResponseDTO>> searchBooks(
+    public ResponseEntity<Page<BookResponseDTO>> searchBooks(
             @RequestParam(value = "title", required = false) String title,
-            @RequestParam(value = "author", required = false) String author) {
+            @RequestParam(value = "author", required = false) String author,
+            @PageableDefault(size = 20, sort = "id") Pageable pageable) {
 
-        List<BookResponseDTO> filteredBooks = bookService.searchBooks(title, author);
+        Page<BookResponseDTO> filteredBooks = bookService.searchBooks(title, author, pageable);
         return ResponseEntity.ok(filteredBooks);
     }
 
